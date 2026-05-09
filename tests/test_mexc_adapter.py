@@ -28,6 +28,15 @@ def test_mexc_adapter_maps_catalog_current_and_history(settings: Settings) -> No
                             "state": 0,
                             "displayNameEn": "BTC_USDT SWAP",
                             "apiAllowed": False,
+                        },
+                        {
+                            "symbol": "TONCOIN_USDT",
+                            "baseCoin": "TONCOIN",
+                            "quoteCoin": "USDT",
+                            "settleCoin": "USDT",
+                            "state": 0,
+                            "displayNameEn": "TONCOIN_USDT SWAP",
+                            "apiAllowed": True,
                         }
                     ]
                 },
@@ -61,6 +70,19 @@ def test_mexc_adapter_maps_catalog_current_and_history(settings: Settings) -> No
                     }
                 },
             )
+        if request.url.path.endswith("/funding_rate/TONCOIN_USDT"):
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "symbol": "TONCOIN_USDT",
+                        "fundingRate": 0.0006,
+                        "collectCycle": 4,
+                        "nextSettleTime": 1587470800000,
+                        "timestamp": 1587442022003,
+                    }
+                },
+            )
         return httpx.Response(
             200,
             json={
@@ -88,7 +110,7 @@ def test_mexc_adapter_maps_catalog_current_and_history(settings: Settings) -> No
             snapshots = await adapter.fetch_current_snapshots(markets)
             history = await adapter.fetch_recent_history(markets, lookback_hours=24 * 365 * 10)
 
-        assert len(markets) == 1
+        assert len(markets) == 2
         assert markets[0].ticker == "BTC"
         assert markets[0].external_symbol == "BTC_USDT"
         assert snapshots[0].funding_rate_decimal == pytest.approx(0.0008)
@@ -96,5 +118,6 @@ def test_mexc_adapter_maps_catalog_current_and_history(settings: Settings) -> No
         assert snapshots[0].funding_rate_1h_equiv == pytest.approx(0.0001)
         assert history[0].funding_rate_1h_equiv == pytest.approx(0.00003325)
         assert history[0].observation_source == "history_backfill"
+        assert any(market.ticker == "TON" for market in markets)
 
     asyncio.run(run_test())

@@ -8,7 +8,7 @@ import httpx
 from app.config import Settings
 from app.connectors.base import ExchangeAdapter
 from app.models import FundingSnapshot, Market, MEXC_EXCHANGE
-from app.utils import funding_decimal_to_percent, to_1h_equivalent, utcnow
+from app.utils import canonicalize_ticker, funding_decimal_to_percent, to_1h_equivalent, utcnow
 
 
 class MexcAdapter(ExchangeAdapter):
@@ -30,7 +30,7 @@ class MexcAdapter(ExchangeAdapter):
             if state != 0 or item.get("quoteCoin") != "USDT" or item.get("settleCoin") != "USDT":
                 continue
 
-            base_coin = str(item["baseCoin"]).upper()
+            base_coin = canonicalize_ticker(str(item["baseCoin"]))
             symbol = str(item["symbol"]).upper()
             markets.append(
                 Market(

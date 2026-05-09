@@ -14,17 +14,10 @@ def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settin
     templates = Jinja2Templates(directory="templates")
 
     @app.get("/", response_class=HTMLResponse)
-    async def dashboard(
-        request: Request,
-        q: str = "",
-        only_multi_exchange: bool | None = None,
-    ) -> HTMLResponse:
-        if only_multi_exchange is None:
-            only_multi_exchange = settings.show_only_multi_exchange_default
+    async def dashboard(request: Request) -> HTMLResponse:
         rows = build_spread_rows(
             repository.list_latest_snapshots(),
-            ticker_query=q,
-            only_multi_exchange=only_multi_exchange,
+            only_multi_exchange=settings.show_only_multi_exchange_default,
         )
         return templates.TemplateResponse(
             request,
@@ -33,14 +26,12 @@ def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settin
                 "request": request,
                 "rows": rows,
                 "exchange_columns": collect_exchange_columns(rows),
-                "query": q,
-                "only_multi_exchange": only_multi_exchange,
                 "collector_runs": serialize_collector_status(repository.latest_collector_runs()),
             },
         )
 
     @app.get("/api/spreads")
-    async def api_spreads(q: str = "", only_multi_exchange: bool = True) -> JSONResponse:
+    async def api_spreads(q: str = "", only_multi_exchange: bool = False) -> JSONResponse:
         rows = build_spread_rows(
             repository.list_latest_snapshots(),
             ticker_query=q,

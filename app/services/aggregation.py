@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from app.models import FundingSnapshot, SpreadExchangeValue, SpreadRow
+from app.utils import canonicalize_ticker
 
 
 def build_spread_rows(
@@ -14,9 +15,10 @@ def build_spread_rows(
     normalized_query = ticker_query.strip().upper()
 
     for snapshot in snapshots:
-        if normalized_query and normalized_query not in snapshot.ticker:
+        canonical_ticker = canonicalize_ticker(snapshot.ticker)
+        if normalized_query and normalized_query not in canonical_ticker:
             continue
-        grouped[snapshot.ticker].append(snapshot)
+        grouped[canonical_ticker].append(snapshot)
 
     rows: list[SpreadRow] = []
     for ticker, grouped_snapshots in grouped.items():

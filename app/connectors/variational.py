@@ -8,6 +8,7 @@ from app.config import Settings
 from app.connectors.base import ExchangeAdapter
 from app.models import FundingSnapshot, Market, VARIATIONAL_EXCHANGE
 from app.utils import (
+    canonicalize_ticker,
     funding_decimal_to_percent,
     normalize_variational_rate,
     parse_datetime,
@@ -30,7 +31,7 @@ class VariationalAdapter(ExchangeAdapter):
         markets: list[Market] = []
         for listing in payload.get("listings", []):
             funding_interval_hours = float(listing.get("funding_interval_s", 28800)) / 3600.0
-            ticker = str(listing["ticker"]).upper()
+            ticker = canonicalize_ticker(str(listing["ticker"]))
             markets.append(
                 Market(
                     exchange=self.exchange,
@@ -54,7 +55,7 @@ class VariationalAdapter(ExchangeAdapter):
         fallback_observed_at = utcnow()
         snapshots: list[FundingSnapshot] = []
         for listing in payload.get("listings", []):
-            ticker = str(listing["ticker"]).upper()
+            ticker = canonicalize_ticker(str(listing["ticker"]))
             funding_interval_hours = float(listing.get("funding_interval_s", 28800)) / 3600.0
             observed_at = parse_datetime(listing.get("quotes", {}).get("updated_at")) or fallback_observed_at
             funding_rate_raw = float(listing["funding_rate"])

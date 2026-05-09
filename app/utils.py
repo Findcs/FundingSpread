@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+TICKER_ALIASES: dict[str, str] = {
+    "TONCOIN": "TON",
+}
+
 
 def utcnow() -> datetime:
     return datetime.now(tz=UTC)
@@ -44,3 +48,8 @@ def normalize_variational_rate(raw_rate: float, mode: str) -> float:
     if normalized_mode == "decimal":
         return raw_rate
     raise ValueError(f"Unsupported Variational normalization mode: {mode}")
+
+
+def canonicalize_ticker(ticker: str) -> str:
+    normalized = ticker.strip().upper()
+    return TICKER_ALIASES.get(normalized, normalized)

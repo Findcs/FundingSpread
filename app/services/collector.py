@@ -135,9 +135,16 @@ class PollingCoordinator:
     def __init__(self):
         self._tasks: list[asyncio.Task] = []
 
-    async def start(self, jobs: list[tuple[str, int, Callable[[], Awaitable[object]]]]) -> None:
-        for name, interval_s, job in jobs:
-            self._tasks.append(asyncio.create_task(self._run_loop(name, interval_s, job)))
+    async def start(
+        self,
+        jobs: list[tuple[str, int, Callable[[], Awaitable[object]], bool]],
+    ) -> None:
+        for name, interval_s, job, run_immediately in jobs:
+            self._tasks.append(
+                asyncio.create_task(
+                    self._run_loop(name, interval_s, job, run_immediately=run_immediately)
+                )
+            )
 
     async def stop(self) -> None:
         for task in self._tasks:
@@ -151,8 +158,11 @@ class PollingCoordinator:
         name: str,
         interval_s: int,
         job: Callable[[], Awaitable[object]],
+        run_immediately: bool = False,
     ) -> None:
         logger.info("Starting polling task %s", name)
+        if not run_immediately:
+            await asyncio.sleep(interval_s)
         while True:
             try:
                 await job()

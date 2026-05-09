@@ -21,7 +21,7 @@ class Settings:
     mexc_history_backfill_enabled: bool = True
     mexc_history_lookback_hours: int = 24
     mexc_history_page_size: int = 100
-    show_only_multi_exchange_default: bool = True
+    show_only_multi_exchange_default: bool = False
 
     @classmethod
     def from_env(cls) -> "Settings":

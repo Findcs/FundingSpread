@@ -7,6 +7,7 @@ import sqlite3
 
 from app.models import CollectorRun, FundingSnapshot, Market
 from app.utils import (
+    canonicalize_ticker,
     funding_decimal_to_percent,
     normalize_variational_rate,
     parse_datetime,
@@ -96,6 +97,7 @@ class SQLiteRepository:
             )
         self._ensure_snapshot_columns()
         self._deduplicate_funding_snapshots()
+        self._canonicalize_tickers()
         with self._cursor() as cursor:
             cursor.execute(
                 """
@@ -133,6 +135,37 @@ class SQLiteRepository:
                 )
                 """
             )
+
+    def _canonicalize_tickers(self) -> None:
+        with self._cursor() as cursor:
+            market_rows = cursor.execute(
+                "SELECT id, ticker, base_asset FROM markets"
+            ).fetchall()
+            market_updates = []
+            for row in market_rows:
+                canonical_ticker = canonicalize_ticker(row["ticker"])
+                canonical_base_asset = canonicalize_ticker(row["base_asset"])
+                if canonical_ticker != row["ticker"] or canonical_base_asset != row["base_asset"]:
+                    market_updates.append((canonical_ticker, canonical_base_asset, row["id"]))
+            if market_updates:
+                cursor.executemany(
+                    "UPDATE markets SET ticker = ?, base_asset = ? WHERE id = ?",
+                    market_updates,
+                )
+
+            snapshot_rows = cursor.execute(
+                "SELECT id, ticker FROM funding_snapshots"
+            ).fetchall()
+            snapshot_updates = []
+            for row in snapshot_rows:
+                canonical_ticker = canonicalize_ticker(row["ticker"])
+                if canonical_ticker != row["ticker"]:
+                    snapshot_updates.append((canonical_ticker, row["id"]))
+            if snapshot_updates:
+                cursor.executemany(
+                    "UPDATE funding_snapshots SET ticker = ? WHERE id = ?",
+                    snapshot_updates,
+                )
 
     def migrate_snapshot_metrics(self, variational_normalization_mode: str) -> None:
         with self._cursor() as cursor:
@@ -363,7 +396,7 @@ class SQLiteRepository:
                   AND funding_snapshots.observed_at >= ?
                 ORDER BY funding_snapshots.observed_at DESC, funding_snapshots.exchange
                 """,
-                (ticker.upper(), to_iso(cutoff)),
+                (canonicalize_ticker(ticker), to_iso(cutoff)),
             ).fetchall()
         return [self._snapshot_from_row(row) for row in rows]
 
@@ -412,9 +445,9 @@ class SQLiteRepository:
     def _market_from_row(row: sqlite3.Row) -> Market:
         return Market(
             exchange=row["exchange"],
-            ticker=row["ticker"],
+            ticker=canonicalize_ticker(row["ticker"]),
             external_symbol=row["external_symbol"],
-            base_asset=row["base_asset"],
+            base_asset=canonicalize_ticker(row["base_asset"]),
             quote_asset=row["quote_asset"],
             is_active=bool(row["is_active"]),
             funding_interval_hours=row["funding_interval_hours"],
@@ -468,7 +501,7 @@ class SQLiteRepository:
 
         return FundingSnapshot(
             exchange=row["exchange"],
-            ticker=row["ticker"],
+            ticker=canonicalize_ticker(row["ticker"]),
             external_symbol=row["external_symbol"],
             funding_rate_raw=row["funding_rate_raw"],
             funding_rate_decimal=funding_rate_decimal,

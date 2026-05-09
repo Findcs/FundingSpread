@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,7 +10,6 @@
             --ink: #1f2328;
             --muted: #5e6873;
             --line: rgba(31, 35, 40, 0.12);
-            --accent: #bd6f1d;
             --accent-dark: #8e4c07;
             --good: #0c7a60;
             --bad: #b42318;
@@ -63,45 +62,10 @@
 
         .subtitle {
             margin: 14px 0 0;
-            max-width: 860px;
+            max-width: 920px;
             color: var(--muted);
             font-size: 17px;
             line-height: 1.58;
-        }
-
-        .filters {
-            display: grid;
-            grid-template-columns: 1fr auto auto;
-            gap: 12px;
-            align-items: center;
-            margin-top: 26px;
-        }
-
-        input[type="search"] {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            padding: 14px 16px;
-            background: rgba(255, 255, 255, 0.86);
-            font: inherit;
-        }
-
-        .checkbox {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--muted);
-            font-size: 14px;
-        }
-
-        button {
-            border: none;
-            border-radius: 14px;
-            padding: 14px 18px;
-            cursor: pointer;
-            color: #fff;
-            font: inherit;
-            background: linear-gradient(135deg, var(--accent) 0%, #de8d35 100%);
         }
 
         .layout {
@@ -159,7 +123,6 @@
 
         .positive { color: var(--good); }
         .negative { color: var(--bad); }
-
         .muted { color: var(--muted); }
 
         .status-item {
@@ -189,7 +152,6 @@
 
         @media (max-width: 980px) {
             .layout { grid-template-columns: 1fr; }
-            .filters { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -197,19 +159,12 @@
 <main class="page">
     <section class="hero">
         <p class="eyebrow">Funding Spread Monitor</p>
-        <h1>Funding spread по совпадающим тикерам</h1>
+        <h1>Funding spread by matched tickers</h1>
         <p class="subtitle">
-            Все ставки приведены к единому формату <strong>1h funding</strong> и показаны в процентах.
-            Сортировка идёт по максимальному абсолютному spread между подключёнными биржами.
+            Tickers are normalized before comparison, so aliases like <strong>TONCOIN</strong> and
+            <strong>TON</strong> are grouped into the same row. Assets available on only one exchange
+            are still shown in the table.
         </p>
-        <form method="get" class="filters">
-            <input type="search" name="q" value="{{ query }}" placeholder="Поиск тикера: BTC, ETH, RAVE">
-            <label class="checkbox">
-                <input type="checkbox" name="only_multi_exchange" value="true" {% if only_multi_exchange %}checked{% endif %}>
-                Только тикеры на 2+ биржах
-            </label>
-            <button type="submit">Применить</button>
-        </form>
     </section>
 
     <section class="layout">
@@ -231,7 +186,7 @@
                             <tr>
                                 <td>
                                     <div class="ticker">{{ row.ticker }}</div>
-                                    <div class="ticker-meta mono">бирж: {{ row.exchanges_count }} · updated {{ row.updated_at.isoformat() }}</div>
+                                    <div class="ticker-meta mono">exchanges: {{ row.exchanges_count }} · updated {{ row.updated_at.strftime("%Y-%m-%d %H:%M") }}</div>
                                 </td>
                                 <td class="mono {% if row.spread_1h_percent >= 0 %}positive{% else %}negative{% endif %}">
                                     {{ "%.4f%%"|format(row.spread_1h_percent) }}
@@ -255,7 +210,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="{{ 2 + exchange_columns|length }}" class="empty">Под выбранные фильтры пока нет совпадающих данных.</td>
+                            <td colspan="{{ 2 + exchange_columns|length }}" class="empty">No funding data available yet.</td>
                         </tr>
                     {% endif %}
                     </tbody>
@@ -264,7 +219,7 @@
         </article>
 
         <aside class="panel">
-            <h2>Статус коллекторов</h2>
+            <h2>Collector Status</h2>
             {% if collector_runs %}
                 {% for run in collector_runs %}
                     <div class="status-item">
@@ -275,14 +230,14 @@
                             </div>
                         </div>
                         <div class="mono">items: {{ run.item_count }}</div>
-                        <div class="ticker-meta mono">{{ run.finished_at }}</div>
+                        <div class="ticker-meta mono">{{ run.finished_at[:16].replace("T", " ") }}</div>
                         {% if run.error_message %}
                             <div class="negative">{{ run.error_message }}</div>
                         {% endif %}
                     </div>
                 {% endfor %}
             {% else %}
-                <p class="empty">Статусов пока нет.</p>
+                <p class="empty">No collector status yet.</p>
             {% endif %}
         </aside>
     </section>
