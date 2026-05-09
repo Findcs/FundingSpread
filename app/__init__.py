@@ -1,0 +1,1 @@
+"""Funding spread monitor application."""
