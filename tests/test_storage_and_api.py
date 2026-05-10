@@ -89,6 +89,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_rate_1h_equiv=0.0006836009,
                 observed_at=observed_at,
                 normalization_mode="variational_bps",
+                mark_price=100.4,
+                volume_24h=12_000_000,
                 raw_payload={
                     "ticker": "RAVE",
                     "funding_rate": "6.836009",
@@ -106,6 +108,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_interval_hours=8.0,
                 funding_rate_1h_equiv=0.000045,
                 observed_at=observed_at,
+                mark_price=1.2345,
+                volume_24h=3_000_000,
                 raw_payload={"symbol": "RAVEUSDT"},
             ),
             FundingSnapshot(
@@ -118,6 +122,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_interval_hours=8.0,
                 funding_rate_1h_equiv=0.00005,
                 observed_at=observed_at,
+                mark_price=12345.67,
+                volume_24h=5_000_000,
                 raw_payload={"symbol": "RAVEUSDT"},
             ),
             FundingSnapshot(
@@ -130,6 +136,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_interval_hours=8.0,
                 funding_rate_1h_equiv=0.000036,
                 observed_at=observed_at,
+                mark_price=100.0,
+                volume_24h=12_000,
                 raw_payload={"name": "RAVE_USDT"},
             ),
             FundingSnapshot(
@@ -142,6 +150,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_interval_hours=8.0,
                 funding_rate_1h_equiv=0.00005775,
                 observed_at=observed_at,
+                mark_price=0.00012345,
+                volume_24h=18_000_000,
                 raw_payload={"timestamp": int(observed_at.timestamp() * 1000)},
             ),
         ]
@@ -167,6 +177,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
 
     assert spreads["rows"][0]["ticker"] == "RAVE"
     assert spreads["rows"][0]["spread_1h_percent"] == pytest.approx(0.06476009)
+    assert spreads["rows"][0]["price_spread_percent"] == pytest.approx(0.4)
+    assert spreads["rows"][0]["min_volume_24h"] == pytest.approx(12_000)
     assert spreads["exchanges"] == ["variational", "aster", "extended", "bitget", "gate", "mexc"]
     assert spreads["rows"][0]["funding_by_exchange"]["aster"]["funding_rate_percent"] == pytest.approx(0.036)
     assert spreads["rows"][0]["funding_by_exchange"]["bitget"]["funding_rate_percent"] == 0.04
@@ -180,6 +192,14 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
     assert "Bitget" in dashboard.text
     assert "Best Rate" in dashboard.text
     assert "Gate" in dashboard.text
+    assert "Price Spread" in dashboard.text
+    assert "Min Volume" in dashboard.text
+    assert "Long Gate vs Short Variational" in dashboard.text
+    assert "12K" in dashboard.text
+    assert "price 1.2345 | 8.0h" in dashboard.text
+    assert "price 12,345.67 | 8.0h" in dashboard.text
+    assert "price 0.000123 | 4.0h" in dashboard.text
+    assert "raw " not in dashboard.text
     assert history[0]["funding_rate_1h_percent"] > 0
 
 

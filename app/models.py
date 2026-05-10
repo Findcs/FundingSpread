@@ -67,11 +67,18 @@ class SpreadRow:
     ticker: str
     spread_1h_percent: float
     spread_abs_1h_percent: float
+    price_spread_percent: float | None
+    min_volume_24h: float | None
     exchanges_count: int
     min_exchange: str
     min_rate_1h_percent: float
     max_exchange: str
     max_rate_1h_percent: float
+    min_price_exchange: str | None
+    min_price: float | None
+    max_price_exchange: str | None
+    max_price: float | None
+    min_volume_exchange: str | None
     updated_at: datetime
     rates_by_exchange: dict[str, SpreadExchangeValue] = field(default_factory=dict)
     exchange_values: list[SpreadExchangeValue] = field(default_factory=list)

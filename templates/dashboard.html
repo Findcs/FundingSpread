@@ -230,7 +230,12 @@
         }
 
         .table-tools {
-            margin: 0 0 10px;
+            position: sticky;
+            bottom: 10px;
+            z-index: 5;
+            margin: 10px 0 0;
+            padding: 8px 10px 0;
+            background: linear-gradient(180deg, rgba(238, 243, 251, 0), rgba(238, 243, 251, 0.92) 38%);
         }
 
         .table-scrollbar {
@@ -296,6 +301,14 @@
             background: rgba(246, 250, 255, 0.88);
         }
 
+        tbody tr.tight-price-spread {
+            background: rgba(34, 176, 125, 0.08);
+        }
+
+        tbody tr.tight-price-spread:hover {
+            background: rgba(34, 176, 125, 0.12);
+        }
+
         tbody tr:last-child td {
             border-bottom: none;
         }
@@ -352,9 +365,16 @@
         .rate-value,
         .extreme-value {
             font-variant-numeric: tabular-nums;
-            font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.03em;
+        }
+
+        .rate-value {
+            font-size: 18px;
+        }
+
+        .extreme-value {
+            font-size: 20px;
         }
 
         .rate-meta,
@@ -393,6 +413,14 @@
 
         .spread-cell {
             min-width: 138px;
+        }
+
+        .price-spread-cell {
+            min-width: 150px;
+        }
+
+        .volume-cell {
+            min-width: 132px;
         }
 
         .table-wrap::-webkit-scrollbar,
@@ -568,19 +596,14 @@
                 </div>
             </div>
 
-            <div class="table-tools">
-                <p class="table-scrollbar-hint">Scroll horizontally to inspect all exchange columns.</p>
-                <div class="table-scrollbar" data-table-scrollbar hidden>
-                    <div class="table-scrollbar-inner" data-table-scrollbar-inner></div>
-                </div>
-            </div>
-
             <div class="table-wrap" data-table-wrap>
                 <table>
                     <thead>
                     <tr>
                         <th>Symbol</th>
                         <th>Spread</th>
+                        <th>Price Spread</th>
+                        <th>Min Volume</th>
                         <th>Best Rate</th>
                         <th>Worst Rate</th>
                         {% for exchange in exchange_columns %}
@@ -596,7 +619,7 @@
                     <tbody>
                     {% if rows %}
                         {% for row in rows %}
-                            <tr>
+                            <tr{% if row.price_spread_percent is not none and 0 <= row.price_spread_percent < 1 %} class="tight-price-spread"{% endif %}>
                                 <td class="symbol-cell">
                                     <span class="symbol-chip">{{ row.ticker }}</span>
                                     <div class="symbol-meta">
@@ -605,6 +628,28 @@
                                 </td>
                                 <td class="spread-cell">
                                     <span class="spread-pill">{{ "%.4f%%"|format(row.spread_1h_percent) }}</span>
+                                </td>
+                                <td class="price-spread-cell">
+                                    {% if row.price_spread_percent is not none %}
+                                        <div class="extreme-value {% if row.price_spread_percent > 0 %}positive{% elif row.price_spread_percent < 0 %}negative{% else %}muted{% endif %}">
+                                            {{ "%.4f%%"|format(row.price_spread_percent) }}
+                                        </div>
+                                        <div class="extreme-meta">
+                                            Long {{ exchange_meta[row.min_exchange].label }} vs Short {{ exchange_meta[row.max_exchange].label }}
+                                        </div>
+                                    {% else %}
+                                        <div class="rate-value muted">-</div>
+                                        <div class="rate-meta">Need long/short prices</div>
+                                    {% endif %}
+                                </td>
+                                <td class="volume-cell">
+                                    {% if row.min_volume_24h is not none %}
+                                        <div class="extreme-value">{{ row.min_volume_24h|compact_number }}</div>
+                                        <div class="extreme-meta">{{ exchange_meta[row.min_volume_exchange].label }}</div>
+                                    {% else %}
+                                        <div class="rate-value muted">-</div>
+                                        <div class="rate-meta">Need long/short volume</div>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <div class="extreme-box">
@@ -627,7 +672,7 @@
                                                 {{ "%.4f%%"|format(value.funding_rate_1h_percent) }}
                                             </div>
                                             <div class="rate-meta">
-                                                raw {{ "%.4f%%"|format(value.funding_rate_display_percent) }} | {{ value.funding_interval_hours|round(2) }}h
+                                                price {{ value.mark_price|mark_price }} | {{ value.funding_interval_hours|round(2) }}h
                                             </div>
                                         {% else %}
                                             <div class="rate-value muted">-</div>
@@ -639,11 +684,18 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="{{ 4 + exchange_columns|length }}" class="empty">No funding data available yet.</td>
+                            <td colspan="{{ 6 + exchange_columns|length }}" class="empty">No funding data available yet.</td>
                         </tr>
                     {% endif %}
                     </tbody>
                 </table>
+            </div>
+
+            <div class="table-tools">
+                <p class="table-scrollbar-hint">Scroll horizontally to inspect all exchange columns.</p>
+                <div class="table-scrollbar" data-table-scrollbar hidden>
+                    <div class="table-scrollbar-inner" data-table-scrollbar-inner></div>
+                </div>
             </div>
         </article>
 

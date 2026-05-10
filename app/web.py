@@ -50,8 +50,43 @@ def _resolve_exchange_meta(exchange_columns: list[str]) -> dict[str, dict[str, s
     return meta
 
 
+def _format_mark_price(value: float | None) -> str:
+    if value is None:
+        return "-"
+    absolute_value = abs(value)
+    if absolute_value >= 1000:
+        return f"{value:,.2f}"
+    if absolute_value >= 1:
+        return f"{value:,.4f}"
+    if absolute_value >= 0.01:
+        return f"{value:,.5f}"
+    if absolute_value >= 0.0001:
+        return f"{value:,.6f}"
+    return f"{value:,.8f}"
+
+
+def _format_compact_number(value: float | None) -> str:
+    if value is None:
+        return "-"
+    absolute_value = abs(value)
+    suffixes = (
+        (1_000_000_000_000, "T"),
+        (1_000_000_000, "B"),
+        (1_000_000, "M"),
+        (1_000, "K"),
+    )
+    for threshold, suffix in suffixes:
+        if absolute_value >= threshold:
+            compact = value / threshold
+            formatted = f"{compact:.1f}".rstrip("0").rstrip(".")
+            return f"{formatted}{suffix}"
+    return f"{value:.0f}"
+
+
 def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settings) -> None:
     templates = Jinja2Templates(directory="templates")
+    templates.env.filters["mark_price"] = _format_mark_price
+    templates.env.filters["compact_number"] = _format_compact_number
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request) -> HTMLResponse:
@@ -88,11 +123,18 @@ def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settin
                         "ticker": row.ticker,
                         "spread_1h_percent": row.spread_1h_percent,
                         "spread_abs_1h_percent": row.spread_abs_1h_percent,
+                        "price_spread_percent": row.price_spread_percent,
+                        "min_volume_24h": row.min_volume_24h,
                         "exchanges_count": row.exchanges_count,
                         "min_exchange": row.min_exchange,
                         "min_rate_1h_percent": row.min_rate_1h_percent,
                         "max_exchange": row.max_exchange,
                         "max_rate_1h_percent": row.max_rate_1h_percent,
+                        "min_price_exchange": row.min_price_exchange,
+                        "min_price": row.min_price,
+                        "max_price_exchange": row.max_price_exchange,
+                        "max_price": row.max_price,
+                        "min_volume_exchange": row.min_volume_exchange,
                         "updated_at": row.updated_at.isoformat(),
                         "funding_by_exchange": {
                             value.exchange: {

@@ -53,6 +53,8 @@ def test_build_spread_rows_uses_1h_equivalent_and_multi_exchange_filter() -> Non
     assert rows[0].spread_1h_percent == pytest.approx(0.055)
     assert rows[0].min_exchange == "mexc"
     assert rows[0].max_exchange == "variational"
+    assert rows[0].price_spread_percent is None
+    assert rows[0].min_volume_24h is None
 
 
 def test_build_spread_rows_groups_aliases_and_keeps_single_exchange_rows() -> None:
@@ -68,6 +70,8 @@ def test_build_spread_rows_groups_aliases_and_keeps_single_exchange_rows() -> No
             funding_interval_hours=1.0,
             funding_rate_1h_equiv=0.00012,
             observed_at=observed_at,
+            mark_price=5.0,
+            volume_24h=12_000_000,
         ),
         FundingSnapshot(
             exchange="mexc",
@@ -79,6 +83,8 @@ def test_build_spread_rows_groups_aliases_and_keeps_single_exchange_rows() -> No
             funding_interval_hours=4.0,
             funding_rate_1h_equiv=0.0001,
             observed_at=observed_at,
+            mark_price=5.03,
+            volume_24h=12_000,
         ),
         FundingSnapshot(
             exchange="mexc",
@@ -98,3 +104,8 @@ def test_build_spread_rows_groups_aliases_and_keeps_single_exchange_rows() -> No
     assert [row.ticker for row in rows] == ["TON", "DOGE"]
     assert rows[0].exchanges_count == 2
     assert rows[1].exchanges_count == 1
+    assert rows[0].price_spread_percent == pytest.approx(-0.5964214711729598)
+    assert rows[0].min_price_exchange == "mexc"
+    assert rows[0].max_price_exchange == "variational"
+    assert rows[0].min_volume_24h == pytest.approx(12_000)
+    assert rows[0].min_volume_exchange == "mexc"
