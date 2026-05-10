@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,9 @@ from app.storage import SQLiteRepository
 def test_repository_migration_and_api_endpoints(tmp_path) -> None:
     settings = Settings(
         database_path=tmp_path / "app.sqlite3",
+        aster_history_backfill_enabled=False,
+        bitget_history_backfill_enabled=False,
+        gate_history_backfill_enabled=False,
         mexc_history_backfill_enabled=False,
     )
     repository = SQLiteRepository(settings.database_path)
@@ -38,6 +42,38 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                 funding_interval_hours=4.0,
                 metadata={"collect_cycle_hours": 4.0},
             ),
+            Market(
+                exchange="aster",
+                ticker="RAVE",
+                external_symbol="RAVEUSDT",
+                base_asset="RAVE",
+                quote_asset="USDT",
+                funding_interval_hours=8.0,
+            ),
+            Market(
+                exchange="extended",
+                ticker="RAVE",
+                external_symbol="RAVE-USD",
+                base_asset="RAVE",
+                quote_asset="USD",
+                funding_interval_hours=1.0,
+            ),
+            Market(
+                exchange="bitget",
+                ticker="RAVE",
+                external_symbol="RAVEUSDT",
+                base_asset="RAVE",
+                quote_asset="USDT",
+                funding_interval_hours=8.0,
+            ),
+            Market(
+                exchange="gate",
+                ticker="RAVE",
+                external_symbol="RAVE_USDT",
+                base_asset="RAVE",
+                quote_asset="USDT",
+                funding_interval_hours=8.0,
+            ),
         ]
     )
     repository.insert_snapshots(
@@ -59,6 +95,42 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
                     "funding_interval_s": 3600,
                     "quotes": {"updated_at": observed_at.isoformat()},
                 },
+            ),
+            FundingSnapshot(
+                exchange="aster",
+                ticker="RAVE",
+                external_symbol="RAVEUSDT",
+                funding_rate_raw=0.00036,
+                funding_rate_decimal=0.00036,
+                funding_rate_display_percent=0.036,
+                funding_interval_hours=8.0,
+                funding_rate_1h_equiv=0.000045,
+                observed_at=observed_at,
+                raw_payload={"symbol": "RAVEUSDT"},
+            ),
+            FundingSnapshot(
+                exchange="bitget",
+                ticker="RAVE",
+                external_symbol="RAVEUSDT",
+                funding_rate_raw=0.0004,
+                funding_rate_decimal=0.0004,
+                funding_rate_display_percent=0.04,
+                funding_interval_hours=8.0,
+                funding_rate_1h_equiv=0.00005,
+                observed_at=observed_at,
+                raw_payload={"symbol": "RAVEUSDT"},
+            ),
+            FundingSnapshot(
+                exchange="gate",
+                ticker="RAVE",
+                external_symbol="RAVE_USDT",
+                funding_rate_raw=0.000288,
+                funding_rate_decimal=0.000288,
+                funding_rate_display_percent=0.0288,
+                funding_interval_hours=8.0,
+                funding_rate_1h_equiv=0.000036,
+                observed_at=observed_at,
+                raw_payload={"name": "RAVE_USDT"},
             ),
             FundingSnapshot(
                 exchange="mexc",
@@ -94,10 +166,92 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
         history = client.get("/api/tickers/RAVE/history").json()
 
     assert spreads["rows"][0]["ticker"] == "RAVE"
-    assert spreads["rows"][0]["spread_1h_percent"] == pytest.approx(0.05681009)
+    assert spreads["rows"][0]["spread_1h_percent"] == pytest.approx(0.06476009)
+    assert spreads["exchanges"] == ["variational", "aster", "extended", "bitget", "gate", "mexc"]
+    assert spreads["rows"][0]["funding_by_exchange"]["aster"]["funding_rate_percent"] == pytest.approx(0.036)
+    assert spreads["rows"][0]["funding_by_exchange"]["bitget"]["funding_rate_percent"] == 0.04
+    assert spreads["rows"][0]["funding_by_exchange"]["gate"]["funding_rate_percent"] == 0.0288
     assert spreads["rows"][0]["funding_by_exchange"]["mexc"]["funding_rate_percent"] == 0.0462
     assert spreads["rows"][0]["funding_by_exchange"]["mexc"]["funding_interval_hours"] == 4.0
     assert spreads["rows"][0]["funding_by_exchange"]["mexc"]["funding_rate_1h_percent"] == pytest.approx(0.01155)
     assert health["status"] == "ok"
-    assert "Spread 1H" in dashboard.text
+    assert "Aster" in dashboard.text
+    assert "Extended" in dashboard.text
+    assert "Bitget" in dashboard.text
+    assert "Best Rate" in dashboard.text
+    assert "Gate" in dashboard.text
     assert history[0]["funding_rate_1h_percent"] > 0
+
+
+def test_repository_inserts_snapshots_into_legacy_schema_with_required_8h_field(tmp_path) -> None:
+    database_path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(database_path)
+    connection.executescript(
+        """
+        CREATE TABLE funding_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exchange TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            external_symbol TEXT NOT NULL,
+            funding_rate_raw REAL NOT NULL,
+            funding_interval_hours REAL NOT NULL,
+            funding_rate_8h_equiv REAL NOT NULL,
+            mark_price REAL,
+            volume_24h REAL,
+            open_interest REAL,
+            observed_at TEXT NOT NULL,
+            next_settlement_at TEXT,
+            raw_payload_json TEXT NOT NULL
+        );
+
+        CREATE TABLE markets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exchange TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            external_symbol TEXT NOT NULL,
+            base_asset TEXT NOT NULL,
+            quote_asset TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            funding_interval_hours REAL NOT NULL,
+            metadata_json TEXT NOT NULL,
+            last_catalog_at TEXT,
+            UNIQUE(exchange, external_symbol)
+        );
+
+        CREATE TABLE collector_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exchange TEXT NOT NULL,
+            task_name TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            item_count INTEGER NOT NULL,
+            error_message TEXT
+        );
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    repository = SQLiteRepository(database_path)
+    repository.initialize()
+    inserted = repository.insert_snapshots(
+        [
+            FundingSnapshot(
+                exchange="extended",
+                ticker="BTC",
+                external_symbol="BTC-USD",
+                funding_rate_raw=0.0001,
+                funding_rate_decimal=0.0001,
+                funding_rate_display_percent=0.01,
+                funding_interval_hours=1.0,
+                funding_rate_1h_equiv=0.0001,
+                observed_at=datetime(2026, 5, 9, 12, 0, tzinfo=UTC),
+                raw_payload={"market": "BTC-USD"},
+            )
+        ]
+    )
+
+    assert inserted == 1
+    assert repository.count_snapshots("extended") == 1
+    repository.close()

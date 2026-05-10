@@ -6,211 +6,579 @@
     <title>Funding Spread Monitor</title>
     <style>
         :root {
-            --bg-card: rgba(255, 251, 244, 0.86);
-            --ink: #1f2328;
-            --muted: #5e6873;
-            --line: rgba(31, 35, 40, 0.12);
-            --accent-dark: #8e4c07;
-            --good: #0c7a60;
-            --bad: #b42318;
-            --shadow: 0 24px 60px rgba(84, 56, 23, 0.14);
+            --bg: #eef3fb;
+            --bg-accent: #e0ebff;
+            --panel: rgba(255, 255, 255, 0.88);
+            --panel-strong: rgba(255, 255, 255, 0.96);
+            --ink: #152033;
+            --muted: #6a768a;
+            --line: rgba(21, 32, 51, 0.08);
+            --line-strong: rgba(21, 32, 51, 0.14);
+            --good: #22b07d;
+            --bad: #ef5a6f;
+            --good-soft: rgba(34, 176, 125, 0.12);
+            --bad-soft: rgba(239, 90, 111, 0.12);
+            --brand: #2f6fed;
+            --brand-soft: rgba(47, 111, 237, 0.12);
+            --shadow: 0 28px 70px rgba(34, 55, 99, 0.12);
+            --radius-xl: 28px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
         }
 
         * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            font-family: Georgia, "Times New Roman", serif;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
             color: var(--ink);
             background:
-                radial-gradient(circle at top left, rgba(189, 111, 29, 0.18), transparent 28%),
-                linear-gradient(135deg, #efe3ce 0%, #f6f3ec 42%, #d8e5e0 100%);
+                radial-gradient(circle at top left, rgba(47, 111, 237, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(34, 176, 125, 0.14), transparent 24%),
+                linear-gradient(180deg, #f6f9ff 0%, var(--bg) 48%, #e8effa 100%);
             min-height: 100vh;
         }
 
         .page {
-            width: min(1320px, calc(100vw - 28px));
-            margin: 24px auto 36px;
+            width: min(1680px, calc(100vw - 28px));
+            margin: 18px auto 34px;
         }
 
-        .hero, .panel {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 24px;
+        .hero,
+        .panel {
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.7);
             box-shadow: var(--shadow);
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(14px);
         }
 
         .hero {
+            border-radius: var(--radius-xl);
             padding: 28px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: auto -60px -80px auto;
+            width: 220px;
+            height: 220px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(47, 111, 237, 0.18), transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            align-items: flex-start;
         }
 
         .eyebrow {
-            margin: 0 0 12px;
-            font-size: 12px;
-            letter-spacing: 0.16em;
+            margin: 0 0 10px;
+            color: var(--brand);
             text-transform: uppercase;
-            color: var(--accent-dark);
+            letter-spacing: 0.18em;
+            font-size: 11px;
+            font-weight: 700;
         }
 
         h1 {
             margin: 0;
+            font-size: clamp(34px, 5vw, 58px);
             line-height: 0.96;
-            font-size: clamp(34px, 6vw, 56px);
+            letter-spacing: -0.05em;
+            max-width: 760px;
         }
 
         .subtitle {
             margin: 14px 0 0;
-            max-width: 920px;
+            max-width: 840px;
             color: var(--muted);
-            font-size: 17px;
-            line-height: 1.58;
+            font-size: 15px;
+            line-height: 1.65;
+        }
+
+        .hero-note {
+            min-width: 220px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            border: 1px solid var(--line);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 247, 255, 0.92));
+        }
+
+        .hero-note-label {
+            margin: 0 0 6px;
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .hero-note-value {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .hero-note-sub {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 24px;
+        }
+
+        .summary-card {
+            padding: 16px 18px;
+            border-radius: 18px;
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+        }
+
+        .summary-label {
+            margin: 0 0 10px;
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .summary-value {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+        }
+
+        .summary-sub {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 12px;
         }
 
         .layout {
             display: grid;
-            grid-template-columns: 2.2fr 1fr;
-            gap: 20px;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 18px;
+            align-items: start;
         }
 
         .panel {
-            padding: 18px;
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+
+        .panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 4px 14px;
+        }
+
+        .panel-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+
+        .panel-subtitle {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--brand-soft);
+            color: var(--brand);
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: currentColor;
         }
 
         .table-wrap {
             overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.78);
         }
 
         table {
             width: 100%;
-            min-width: 760px;
-            border-collapse: collapse;
+            min-width: 1240px;
+            border-collapse: separate;
+            border-spacing: 0;
         }
 
-        th, td {
-            padding: 14px 12px;
-            border-bottom: 1px solid var(--line);
-            text-align: left;
-            vertical-align: top;
-        }
-
-        th {
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: rgba(248, 251, 255, 0.96);
             color: var(--muted);
             font-size: 12px;
-            text-transform: uppercase;
+            font-weight: 700;
             letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 16px 14px;
+            border-bottom: 1px solid var(--line-strong);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 16px 14px;
+            border-bottom: 1px solid var(--line);
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        tbody tr {
+            transition: background 140ms ease, transform 140ms ease;
+        }
+
+        tbody tr:hover {
+            background: rgba(246, 250, 255, 0.88);
         }
 
         tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .ticker {
-            font-size: 18px;
-            font-weight: 700;
+        .symbol-cell {
+            min-width: 220px;
         }
 
-        .ticker-meta {
+        .symbol-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(47, 111, 237, 0.16);
+            background: rgba(47, 111, 237, 0.06);
+            color: #0f2452;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+
+        .symbol-meta {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .exchange-head {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .exchange-mark {
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #20345d, #3b83ff);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            flex: 0 0 auto;
+        }
+
+        .rate-cell {
+            min-width: 126px;
+        }
+
+        .rate-value,
+        .extreme-value {
+            font-variant-numeric: tabular-nums;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        .rate-meta,
+        .extreme-meta,
+        .status-meta,
+        .empty {
             margin-top: 6px;
             color: var(--muted);
             font-size: 12px;
-        }
-
-        .mono {
-            font-variant-numeric: tabular-nums;
+            line-height: 1.45;
         }
 
         .positive { color: var(--good); }
         .negative { color: var(--bad); }
         .muted { color: var(--muted); }
 
-        .status-item {
-            padding: 14px 0;
-            border-bottom: 1px solid var(--line);
+        .extreme-box {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
-        .status-item:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
+        .spread-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(21, 32, 51, 0.04);
+            border: 1px solid rgba(21, 32, 51, 0.08);
+            font-variant-numeric: tabular-nums;
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--ink);
+        }
+
+        .status-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .status-item {
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.68);
         }
 
         .status-head {
             display: flex;
             justify-content: space-between;
             gap: 12px;
+            align-items: flex-start;
         }
 
         .status-name {
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 800;
         }
 
-        .empty {
-            color: var(--muted);
-            padding: 24px 8px 8px;
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
-        @media (max-width: 980px) {
-            .layout { grid-template-columns: 1fr; }
+        .status-badge.success {
+            background: var(--good-soft);
+            color: var(--good);
+        }
+
+        .status-badge.error {
+            background: var(--bad-soft);
+            color: var(--bad);
+        }
+
+        .status-error {
+            margin-top: 8px;
+            color: var(--bad);
+            font-size: 12px;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+
+        @media (max-width: 1200px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .page {
+                width: min(100vw - 16px, 100%);
+                margin: 8px auto 20px;
+            }
+
+            .hero {
+                padding: 20px;
+                border-radius: 22px;
+            }
+
+            .hero-top,
+            .panel-head {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 34px;
+            }
         }
     </style>
 </head>
 <body>
 <main class="page">
     <section class="hero">
-        <p class="eyebrow">Funding Spread Monitor</p>
-        <h1>Funding spread by matched tickers</h1>
-        <p class="subtitle">
-            Tickers are normalized before comparison, so aliases like <strong>TONCOIN</strong> and
-            <strong>TON</strong> are grouped into the same row. Assets available on only one exchange
-            are still shown in the table.
-        </p>
+        <div class="hero-top">
+            <div>
+                <p class="eyebrow">Funding Spread Monitor</p>
+                <h1>Matched funding spreads across active venues</h1>
+                <p class="subtitle">
+                    Tickers are normalized before comparison, so aliases like <strong>TONCOIN</strong> and
+                    <strong>TON</strong> are merged into one symbol row. Rates are shown as 1-hour equivalents
+                    to keep exchanges with different funding intervals directly comparable.
+                </p>
+            </div>
+            <div class="hero-note">
+                <p class="hero-note-label">Latest Update</p>
+                <p class="hero-note-value">
+                    {% if summary.latest_update %}
+                        {{ summary.latest_update.strftime("%Y-%m-%d %H:%M UTC") }}
+                    {% else %}
+                        Waiting for data
+                    {% endif %}
+                </p>
+                <p class="hero-note-sub">Live collectors keep this table refreshed in the background.</p>
+            </div>
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <p class="summary-label">Tracked Symbols</p>
+                <p class="summary-value">{{ summary.assets_count }}</p>
+                <p class="summary-sub">Rows currently visible on the dashboard</p>
+            </div>
+            <div class="summary-card">
+                <p class="summary-label">Active Exchanges</p>
+                <p class="summary-value">{{ summary.exchanges_count }}</p>
+                <p class="summary-sub">Venues contributing data into the comparison grid</p>
+            </div>
+            <div class="summary-card">
+                <p class="summary-label">Largest Spread</p>
+                <p class="summary-value">{{ "%.4f%%"|format(summary.max_spread_percent) }}</p>
+                <p class="summary-sub">Maximum cross-exchange 1-hour spread currently visible</p>
+            </div>
+            <div class="summary-card">
+                <p class="summary-label">Normalization</p>
+                <p class="summary-value">1H Eq.</p>
+                <p class="summary-sub">All funding values are normalized to an hourly basis</p>
+            </div>
+        </div>
     </section>
 
     <section class="layout">
         <article class="panel">
+            <div class="panel-head">
+                <div>
+                    <h2 class="panel-title">Spread Table</h2>
+                    <p class="panel-subtitle">Best Rate, Worst Rate and Spread columns summarize the extremes per symbol.</p>
+                </div>
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    Live normalized funding
+                </div>
+            </div>
+
             <div class="table-wrap">
                 <table>
                     <thead>
                     <tr>
-                        <th>Ticker</th>
-                        <th>Spread 1H</th>
+                        <th>Symbol</th>
                         {% for exchange in exchange_columns %}
-                            <th>{{ exchange }} 1H</th>
+                            <th>
+                                <span class="exchange-head">
+                                    <span class="exchange-mark">{{ exchange_meta[exchange].monogram }}</span>
+                                    <span>{{ exchange_meta[exchange].label }}</span>
+                                </span>
+                            </th>
                         {% endfor %}
+                        <th>Best Rate</th>
+                        <th>Worst Rate</th>
+                        <th>Spread</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% if rows %}
                         {% for row in rows %}
                             <tr>
-                                <td>
-                                    <div class="ticker">{{ row.ticker }}</div>
-                                    <div class="ticker-meta mono">exchanges: {{ row.exchanges_count }} · updated {{ row.updated_at.strftime("%Y-%m-%d %H:%M") }}</div>
+                                <td class="symbol-cell">
+                                    <span class="symbol-chip">{{ row.ticker }}</span>
+                                    <div class="symbol-meta">
+                                        {{ row.exchanges_count }} exchanges | updated {{ row.updated_at.strftime("%Y-%m-%d %H:%M") }}
+                                    </div>
                                 </td>
-                                <td class="mono {% if row.spread_1h_percent >= 0 %}positive{% else %}negative{% endif %}">
-                                    {{ "%.4f%%"|format(row.spread_1h_percent) }}
-                                </td>
+
                                 {% for exchange in exchange_columns %}
                                     {% set value = row.rates_by_exchange.get(exchange) %}
-                                    <td class="mono">
+                                    <td class="rate-cell">
                                         {% if value %}
-                                            <span class="{% if value.funding_rate_1h_percent >= 0 %}positive{% else %}negative{% endif %}">
+                                            <div class="rate-value {% if value.funding_rate_1h_percent >= 0 %}positive{% else %}negative{% endif %}">
                                                 {{ "%.4f%%"|format(value.funding_rate_1h_percent) }}
-                                            </span>
-                                            <div class="ticker-meta">
-                                                raw {{ "%.4f%%"|format(value.funding_rate_display_percent) }} / {{ value.funding_interval_hours|round(2) }}h
+                                            </div>
+                                            <div class="rate-meta">
+                                                raw {{ "%.4f%%"|format(value.funding_rate_display_percent) }} | {{ value.funding_interval_hours|round(2) }}h
                                             </div>
                                         {% else %}
-                                            <span class="muted">-</span>
+                                            <div class="rate-value muted">-</div>
+                                            <div class="rate-meta">No active market</div>
                                         {% endif %}
                                     </td>
                                 {% endfor %}
+
+                                <td>
+                                    <div class="extreme-box">
+                                        <div class="extreme-value positive">{{ "%.4f%%"|format(row.max_rate_1h_percent) }}</div>
+                                        <div class="extreme-meta">{{ exchange_meta[row.max_exchange].label }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="extreme-box">
+                                        <div class="extreme-value negative">{{ "%.4f%%"|format(row.min_rate_1h_percent) }}</div>
+                                        <div class="extreme-meta">{{ exchange_meta[row.min_exchange].label }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="spread-pill">{{ "%.4f%%"|format(row.spread_1h_percent) }}</span>
+                                </td>
                             </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="{{ 2 + exchange_columns|length }}" class="empty">No funding data available yet.</td>
+                            <td colspan="{{ 4 + exchange_columns|length }}" class="empty">No funding data available yet.</td>
                         </tr>
                     {% endif %}
                     </tbody>
@@ -219,23 +587,33 @@
         </article>
 
         <aside class="panel">
-            <h2>Collector Status</h2>
+            <div class="panel-head">
+                <div>
+                    <h2 class="panel-title">Collector Status</h2>
+                    <p class="panel-subtitle">Recent catalog refreshes, live snapshots and history jobs.</p>
+                </div>
+            </div>
+
             {% if collector_runs %}
-                {% for run in collector_runs %}
-                    <div class="status-item">
-                        <div class="status-head">
-                            <div class="status-name">{{ run.exchange }} / {{ run.task_name }}</div>
-                            <div class="{% if run.status == 'success' %}positive{% else %}negative{% endif %}">
-                                {{ run.status }}
+                <div class="status-list">
+                    {% for run in collector_runs %}
+                        {% set meta = exchange_meta.get(run.exchange, {'label': run.exchange, 'monogram': run.exchange[:2]|upper}) %}
+                        <div class="status-item">
+                            <div class="status-head">
+                                <div>
+                                    <div class="status-name">{{ meta.label }} | {{ run.task_name }}</div>
+                                    <div class="status-meta">{{ run.finished_at[:16].replace("T", " ") }} | items {{ run.item_count }}</div>
+                                </div>
+                                <div class="status-badge {% if run.status == 'success' %}success{% else %}error{% endif %}">
+                                    {{ run.status }}
+                                </div>
                             </div>
+                            {% if run.error_message %}
+                                <div class="status-error">{{ run.error_message }}</div>
+                            {% endif %}
                         </div>
-                        <div class="mono">items: {{ run.item_count }}</div>
-                        <div class="ticker-meta mono">{{ run.finished_at[:16].replace("T", " ") }}</div>
-                        {% if run.error_message %}
-                            <div class="negative">{{ run.error_message }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             {% else %}
                 <p class="empty">No collector status yet.</p>
             {% endif %}

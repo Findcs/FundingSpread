@@ -8,6 +8,10 @@ import httpx
 from fastapi import FastAPI
 
 from app.config import Settings
+from app.connectors.aster import AsterAdapter
+from app.connectors.bitget import BitgetAdapter
+from app.connectors.extended import ExtendedAdapter
+from app.connectors.gate import GateAdapter
 from app.connectors.mexc import MexcAdapter
 from app.connectors.variational import VariationalAdapter
 from app.services.collector import CollectionService, PollingCoordinator
@@ -28,9 +32,17 @@ def create_app(settings: Settings | None = None, start_collectors: bool = True) 
     async def lifespan(app: FastAPI):
         timeout = httpx.Timeout(settings.request_timeout_s)
         variational_client = httpx.AsyncClient(timeout=timeout)
+        aster_client = httpx.AsyncClient(timeout=timeout)
+        extended_client = httpx.AsyncClient(timeout=timeout)
+        bitget_client = httpx.AsyncClient(timeout=timeout)
+        gate_client = httpx.AsyncClient(timeout=timeout)
         mexc_client = httpx.AsyncClient(timeout=timeout)
         adapters = {
             "variational": VariationalAdapter(variational_client, settings),
+            "aster": AsterAdapter(aster_client, settings),
+            "extended": ExtendedAdapter(extended_client),
+            "bitget": BitgetAdapter(bitget_client, settings),
+            "gate": GateAdapter(gate_client, settings),
             "mexc": MexcAdapter(mexc_client, settings),
         }
         collector = CollectionService(repository, adapters, settings)
@@ -52,6 +64,54 @@ def create_app(settings: Settings | None = None, start_collectors: bool = True) 
                         "variational_snapshot_collect",
                         settings.variational_poll_interval_s,
                         lambda: collector.collect_snapshots("variational"),
+                        False,
+                    ),
+                    (
+                        "aster_catalog_refresh",
+                        settings.aster_catalog_refresh_interval_s,
+                        lambda: collector.refresh_catalog("aster"),
+                        False,
+                    ),
+                    (
+                        "aster_snapshot_collect",
+                        settings.aster_poll_interval_s,
+                        lambda: collector.collect_snapshots("aster"),
+                        False,
+                    ),
+                    (
+                        "extended_snapshot_collect",
+                        settings.extended_poll_interval_s,
+                        lambda: collector.collect_snapshots("extended"),
+                        False,
+                    ),
+                    (
+                        "extended_catalog_refresh",
+                        settings.extended_catalog_refresh_interval_s,
+                        lambda: collector.refresh_catalog("extended"),
+                        False,
+                    ),
+                    (
+                        "bitget_catalog_refresh",
+                        settings.bitget_catalog_refresh_interval_s,
+                        lambda: collector.refresh_catalog("bitget"),
+                        False,
+                    ),
+                    (
+                        "bitget_snapshot_collect",
+                        settings.bitget_poll_interval_s,
+                        lambda: collector.collect_snapshots("bitget"),
+                        False,
+                    ),
+                    (
+                        "gate_catalog_refresh",
+                        settings.gate_catalog_refresh_interval_s,
+                        lambda: collector.refresh_catalog("gate"),
+                        False,
+                    ),
+                    (
+                        "gate_snapshot_collect",
+                        settings.gate_poll_interval_s,
+                        lambda: collector.collect_snapshots("gate"),
                         False,
                     ),
                     (
@@ -78,6 +138,10 @@ def create_app(settings: Settings | None = None, start_collectors: bool = True) 
                 await asyncio.gather(bootstrap_task, return_exceptions=True)
             await coordinator.stop()
             await variational_client.aclose()
+            await aster_client.aclose()
+            await extended_client.aclose()
+            await bitget_client.aclose()
+            await gate_client.aclose()
             await mexc_client.aclose()
             repository.close()
 
@@ -93,12 +157,40 @@ async def _run_initial_bootstrap(collector: CollectionService, settings: Setting
     try:
         await asyncio.gather(
             collector.refresh_catalog("variational"),
+            collector.refresh_catalog("aster"),
+            collector.refresh_catalog("extended"),
+            collector.refresh_catalog("bitget"),
+            collector.refresh_catalog("gate"),
             collector.refresh_catalog("mexc"),
         )
         await asyncio.gather(
             collector.collect_snapshots("variational"),
+            collector.collect_snapshots("aster"),
+            collector.collect_snapshots("extended"),
+            collector.collect_snapshots("bitget"),
+            collector.collect_snapshots("gate"),
             collector.collect_snapshots("mexc"),
         )
+        if settings.aster_history_backfill_enabled:
+            await collector.backfill_recent_history(
+                "aster",
+                settings.aster_history_lookback_hours,
+            )
+        if settings.extended_history_backfill_enabled:
+            await collector.backfill_recent_history(
+                "extended",
+                settings.extended_history_lookback_hours,
+            )
+        if settings.bitget_history_backfill_enabled:
+            await collector.backfill_recent_history(
+                "bitget",
+                settings.bitget_history_lookback_hours,
+            )
+        if settings.gate_history_backfill_enabled:
+            await collector.backfill_recent_history(
+                "gate",
+                settings.gate_history_lookback_hours,
+            )
         if settings.mexc_history_backfill_enabled:
             await collector.backfill_recent_history(
                 "mexc",

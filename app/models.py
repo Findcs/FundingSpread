@@ -7,6 +7,10 @@ from typing import Any
 
 VARIATIONAL_EXCHANGE = "variational"
 MEXC_EXCHANGE = "mexc"
+EXTENDED_EXCHANGE = "extended"
+GATE_EXCHANGE = "gate"
+BITGET_EXCHANGE = "bitget"
+ASTER_EXCHANGE = "aster"
 
 
 @dataclass(slots=True)

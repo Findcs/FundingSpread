@@ -67,7 +67,7 @@ class CollectionService:
             snapshots = await adapter.fetch_current_snapshots(active_markets)
             if active_markets:
                 self.repository.upsert_markets(active_markets)
-            self.repository.insert_snapshots(snapshots)
+            inserted_count = self.repository.insert_snapshots(snapshots)
             self.repository.insert_collector_run(
                 CollectorRun(
                     exchange=exchange,
@@ -75,10 +75,16 @@ class CollectionService:
                     started_at=started_at,
                     finished_at=utcnow(),
                     status="success",
-                    item_count=len(snapshots),
+                    item_count=inserted_count,
                 )
             )
-            return len(snapshots)
+            if snapshots and inserted_count == 0:
+                logger.warning(
+                    "Collected %s snapshots for %s but inserted 0 rows into the database",
+                    len(snapshots),
+                    exchange,
+                )
+            return inserted_count
         except Exception as exc:
             self.repository.insert_collector_run(
                 CollectorRun(
@@ -103,7 +109,7 @@ class CollectionService:
         started_at = utcnow()
         try:
             snapshots = await adapter.fetch_recent_history(active_markets, lookback_hours)
-            self.repository.insert_snapshots(snapshots)
+            inserted_count = self.repository.insert_snapshots(snapshots)
             self.repository.insert_collector_run(
                 CollectorRun(
                     exchange=exchange,
@@ -111,10 +117,16 @@ class CollectionService:
                     started_at=started_at,
                     finished_at=utcnow(),
                     status="success",
-                    item_count=len(snapshots),
+                    item_count=inserted_count,
                 )
             )
-            return len(snapshots)
+            if snapshots and inserted_count == 0:
+                logger.warning(
+                    "Fetched %s history snapshots for %s but inserted 0 rows into the database",
+                    len(snapshots),
+                    exchange,
+                )
+            return inserted_count
         except Exception as exc:
             self.repository.insert_collector_run(
                 CollectorRun(

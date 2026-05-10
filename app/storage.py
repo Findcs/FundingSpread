@@ -316,20 +316,36 @@ class SQLiteRepository:
         with self._cursor() as cursor:
             return int(cursor.execute(query, params).fetchone()[0])
 
-    def insert_snapshots(self, snapshots: list[FundingSnapshot]) -> None:
-        if not snapshots:
-            return
+    def list_known_exchanges(self) -> list[str]:
         with self._cursor() as cursor:
+            rows = cursor.execute(
+                """
+                SELECT exchange
+                FROM (
+                    SELECT exchange FROM markets
+                    UNION
+                    SELECT exchange FROM funding_snapshots
+                )
+                ORDER BY exchange
+                """
+            ).fetchall()
+        return [str(row["exchange"]) for row in rows]
+
+    def insert_snapshots(self, snapshots: list[FundingSnapshot]) -> int:
+        if not snapshots:
+            return 0
+        with self._cursor() as cursor:
+            before_changes = self._connection.total_changes
             cursor.executemany(
                 """
                 INSERT OR IGNORE INTO funding_snapshots (
                     exchange, ticker, external_symbol, funding_rate_raw,
                     funding_rate_decimal, funding_rate_display_percent,
-                    funding_interval_hours, funding_rate_1h_equiv,
+                    funding_interval_hours, funding_rate_1h_equiv, funding_rate_8h_equiv,
                     normalization_mode, observation_source, source_exchange_timestamp,
                     mark_price, volume_24h, open_interest, observed_at,
                     next_settlement_at, raw_payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -341,6 +357,7 @@ class SQLiteRepository:
                         snapshot.funding_rate_display_percent,
                         snapshot.funding_interval_hours,
                         snapshot.funding_rate_1h_equiv,
+                        snapshot.funding_rate_1h_equiv * 8.0,
                         snapshot.normalization_mode,
                         snapshot.observation_source,
                         to_iso(snapshot.source_exchange_timestamp),
@@ -354,6 +371,7 @@ class SQLiteRepository:
                     for snapshot in snapshots
                 ],
             )
+            return self._connection.total_changes - before_changes
 
     def list_latest_snapshots(self) -> list[FundingSnapshot]:
         with self._cursor() as cursor:

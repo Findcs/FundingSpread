@@ -9,6 +9,46 @@ from app.services.aggregation import build_spread_rows, collect_exchange_columns
 from app.services.collector import serialize_collector_status
 from app.storage import SQLiteRepository
 
+EXCHANGE_DISPLAY_META: dict[str, dict[str, str]] = {
+    "aster": {"label": "Aster", "monogram": "AS"},
+    "bitget": {"label": "Bitget", "monogram": "BG"},
+    "extended": {"label": "Extended", "monogram": "EX"},
+    "gate": {"label": "Gate", "monogram": "GT"},
+    "mexc": {"label": "MEXC", "monogram": "MX"},
+    "variational": {"label": "Variational", "monogram": "VR"},
+}
+
+
+def _resolve_exchange_columns(repository: SQLiteRepository, rows) -> list[str]:
+    known_exchanges = repository.list_known_exchanges()
+    row_exchanges = collect_exchange_columns(rows)
+    order = ["variational", "aster", "extended", "bitget", "gate", "mexc"]
+    merged = sorted(set(known_exchanges) | set(row_exchanges))
+    return sorted(merged, key=lambda exchange: (order.index(exchange) if exchange in order else 999, exchange))
+
+
+def _dashboard_summary(rows, exchange_columns: list[str]) -> dict[str, object]:
+    max_spread = max((row.spread_abs_1h_percent for row in rows), default=0.0)
+    latest_update = max((row.updated_at for row in rows), default=None)
+    return {
+        "assets_count": len(rows),
+        "exchanges_count": len(exchange_columns),
+        "max_spread_percent": max_spread,
+        "latest_update": latest_update,
+    }
+
+
+def _resolve_exchange_meta(exchange_columns: list[str]) -> dict[str, dict[str, str]]:
+    meta = dict(EXCHANGE_DISPLAY_META)
+    for exchange in exchange_columns:
+        if exchange in meta:
+            continue
+        meta[exchange] = {
+            "label": exchange.replace("_", " ").title(),
+            "monogram": exchange[:2].upper(),
+        }
+    return meta
+
 
 def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settings) -> None:
     templates = Jinja2Templates(directory="templates")
@@ -19,13 +59,16 @@ def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settin
             repository.list_latest_snapshots(),
             only_multi_exchange=settings.show_only_multi_exchange_default,
         )
+        exchange_columns = _resolve_exchange_columns(repository, rows)
         return templates.TemplateResponse(
             request,
             "dashboard.html",
             {
                 "request": request,
                 "rows": rows,
-                "exchange_columns": collect_exchange_columns(rows),
+                "exchange_columns": exchange_columns,
+                "exchange_meta": _resolve_exchange_meta(exchange_columns),
+                "summary": _dashboard_summary(rows, exchange_columns),
                 "collector_runs": serialize_collector_status(repository.latest_collector_runs()),
             },
         )
@@ -39,7 +82,7 @@ def register_routes(app: FastAPI, repository: SQLiteRepository, settings: Settin
         )
         return JSONResponse(
             {
-                "exchanges": collect_exchange_columns(rows),
+                "exchanges": _resolve_exchange_columns(repository, rows),
                 "rows": [
                     {
                         "ticker": row.ticker,
