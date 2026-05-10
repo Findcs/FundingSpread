@@ -96,15 +96,7 @@ class SQLiteRepository:
                 """
             )
         self._ensure_snapshot_columns()
-        self._deduplicate_funding_snapshots()
-        self._canonicalize_tickers()
-        with self._cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_funding_snapshots_unique
-                    ON funding_snapshots (exchange, external_symbol, observed_at)
-                """
-            )
+        self._ensure_snapshot_unique_index()
 
     def _ensure_snapshot_columns(self) -> None:
         with self._cursor() as cursor:
@@ -135,6 +127,25 @@ class SQLiteRepository:
                 )
                 """
             )
+
+    def _ensure_snapshot_unique_index(self) -> None:
+        try:
+            with self._cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_funding_snapshots_unique
+                        ON funding_snapshots (exchange, external_symbol, observed_at)
+                    """
+                )
+        except sqlite3.IntegrityError:
+            self._deduplicate_funding_snapshots()
+            with self._cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_funding_snapshots_unique
+                        ON funding_snapshots (exchange, external_symbol, observed_at)
+                    """
+                )
 
     def _canonicalize_tickers(self) -> None:
         with self._cursor() as cursor:
@@ -256,9 +267,9 @@ class SQLiteRepository:
                 [
                     (
                         market.exchange,
-                        market.ticker,
+                        canonicalize_ticker(market.ticker),
                         market.external_symbol,
-                        market.base_asset,
+                        canonicalize_ticker(market.base_asset),
                         market.quote_asset,
                         int(market.is_active),
                         market.funding_interval_hours,
@@ -331,9 +342,19 @@ class SQLiteRepository:
             ).fetchall()
         return [str(row["exchange"]) for row in rows]
 
-    def insert_snapshots(self, snapshots: list[FundingSnapshot]) -> int:
+    def insert_snapshots(
+        self,
+        snapshots: list[FundingSnapshot],
+        keep_limit_per_exchange_ticker: int = 2,
+    ) -> int:
         if not snapshots:
             return 0
+        touched_groups = sorted(
+            {
+                (snapshot.exchange, canonicalize_ticker(snapshot.ticker))
+                for snapshot in snapshots
+            }
+        )
         with self._cursor() as cursor:
             before_changes = self._connection.total_changes
             cursor.executemany(
@@ -350,7 +371,7 @@ class SQLiteRepository:
                 [
                     (
                         snapshot.exchange,
-                        snapshot.ticker,
+                        canonicalize_ticker(snapshot.ticker),
                         snapshot.external_symbol,
                         snapshot.funding_rate_raw,
                         snapshot.funding_rate_decimal,
@@ -366,12 +387,18 @@ class SQLiteRepository:
                         snapshot.open_interest,
                         to_iso(snapshot.observed_at),
                         to_iso(snapshot.next_settlement_at),
-                        json.dumps(snapshot.raw_payload, separators=(",", ":"), sort_keys=True),
+                        "{}",
                     )
                     for snapshot in snapshots
                 ],
             )
-            return self._connection.total_changes - before_changes
+            inserted_count = self._connection.total_changes - before_changes
+            self._prune_snapshot_groups(
+                cursor=cursor,
+                groups=touched_groups,
+                keep_limit=max(1, int(keep_limit_per_exchange_ticker)),
+            )
+            return inserted_count
 
     def list_latest_snapshots(self) -> list[FundingSnapshot]:
         with self._cursor() as cursor:
@@ -418,7 +445,11 @@ class SQLiteRepository:
             ).fetchall()
         return [self._snapshot_from_row(row) for row in rows]
 
-    def insert_collector_run(self, run: CollectorRun) -> None:
+    def insert_collector_run(
+        self,
+        run: CollectorRun,
+        keep_limit_per_exchange_task: int = 20,
+    ) -> None:
         with self._cursor() as cursor:
             cursor.execute(
                 """
@@ -436,6 +467,11 @@ class SQLiteRepository:
                     run.item_count,
                     run.error_message,
                 ),
+            )
+            self._prune_collector_run_groups(
+                cursor=cursor,
+                groups=[(run.exchange, run.task_name)],
+                keep_limit=max(1, int(keep_limit_per_exchange_task)),
             )
 
     def latest_collector_runs(self) -> list[dict[str, str | int | None]]:
@@ -458,6 +494,149 @@ class SQLiteRepository:
                 """
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def compact_storage(
+        self,
+        snapshot_retention_per_exchange_ticker: int,
+        collector_run_retention_per_task: int,
+    ) -> dict[str, int]:
+        snapshot_keep_limit = max(1, int(snapshot_retention_per_exchange_ticker))
+        collector_keep_limit = max(1, int(collector_run_retention_per_task))
+
+        before_snapshot_count = self.count_snapshots()
+        before_collector_count = self._count_collector_runs()
+
+        with self._cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM funding_snapshots
+                WHERE id IN (
+                    SELECT id
+                    FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY exchange, ticker
+                                   ORDER BY observed_at DESC, id DESC
+                               ) AS rn
+                        FROM funding_snapshots
+                    )
+                    WHERE rn > ?
+                )
+                """,
+                (snapshot_keep_limit,),
+            )
+            cursor.execute(
+                """
+                DELETE FROM collector_runs
+                WHERE id IN (
+                    SELECT id
+                    FROM (
+                        SELECT id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY exchange, task_name
+                                   ORDER BY finished_at DESC, id DESC
+                               ) AS rn
+                        FROM collector_runs
+                    )
+                    WHERE rn > ?
+                )
+                """,
+                (collector_keep_limit,),
+            )
+
+        self._connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self._connection.execute("VACUUM")
+
+        after_snapshot_count = self.count_snapshots()
+        after_collector_count = self._count_collector_runs()
+        return {
+            "snapshots_removed": before_snapshot_count - after_snapshot_count,
+            "snapshots_remaining": after_snapshot_count,
+            "collector_runs_removed": before_collector_count - after_collector_count,
+            "collector_runs_remaining": after_collector_count,
+        }
+
+    def _count_collector_runs(self) -> int:
+        with self._cursor() as cursor:
+            return int(cursor.execute("SELECT COUNT(*) FROM collector_runs").fetchone()[0])
+
+    @staticmethod
+    def _prune_snapshot_groups(
+        cursor: sqlite3.Cursor,
+        groups: list[tuple[str, str]],
+        keep_limit: int,
+    ) -> None:
+        if not groups:
+            return
+        values_sql = ", ".join(["(?, ?)"] * len(groups))
+        params: list[str | int] = []
+        for exchange, ticker in groups:
+            params.extend((exchange, ticker))
+        params.append(max(1, int(keep_limit)))
+        cursor.execute(
+            f"""
+            WITH targets(exchange, ticker) AS (
+                VALUES {values_sql}
+            ),
+            ranked AS (
+                SELECT funding_snapshots.id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY funding_snapshots.exchange, funding_snapshots.ticker
+                           ORDER BY funding_snapshots.observed_at DESC, funding_snapshots.id DESC
+                       ) AS rn
+                FROM funding_snapshots
+                JOIN targets
+                  ON targets.exchange = funding_snapshots.exchange
+                 AND targets.ticker = funding_snapshots.ticker
+            )
+            DELETE FROM funding_snapshots
+            WHERE id IN (
+                SELECT id
+                FROM ranked
+                WHERE rn > ?
+            )
+            """,
+            params,
+        )
+
+    @staticmethod
+    def _prune_collector_run_groups(
+        cursor: sqlite3.Cursor,
+        groups: list[tuple[str, str]],
+        keep_limit: int,
+    ) -> None:
+        if not groups:
+            return
+        values_sql = ", ".join(["(?, ?)"] * len(groups))
+        params: list[str | int] = []
+        for exchange, task_name in groups:
+            params.extend((exchange, task_name))
+        params.append(max(1, int(keep_limit)))
+        cursor.execute(
+            f"""
+            WITH targets(exchange, task_name) AS (
+                VALUES {values_sql}
+            ),
+            ranked AS (
+                SELECT collector_runs.id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY collector_runs.exchange, collector_runs.task_name
+                           ORDER BY collector_runs.finished_at DESC, collector_runs.id DESC
+                       ) AS rn
+                FROM collector_runs
+                JOIN targets
+                  ON targets.exchange = collector_runs.exchange
+                 AND targets.task_name = collector_runs.task_name
+            )
+            DELETE FROM collector_runs
+            WHERE id IN (
+                SELECT id
+                FROM ranked
+                WHERE rn > ?
+            )
+            """,
+            params,
+        )
 
     @staticmethod
     def _market_from_row(row: sqlite3.Row) -> Market:

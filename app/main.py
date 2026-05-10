@@ -26,7 +26,6 @@ def create_app(settings: Settings | None = None, start_collectors: bool = True) 
     settings = settings or Settings.from_env()
     repository = SQLiteRepository(settings.database_path)
     repository.initialize()
-    repository.migrate_snapshot_metrics(settings.variational_normalization_mode)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -171,31 +170,6 @@ async def _run_initial_bootstrap(collector: CollectionService, settings: Setting
             collector.collect_snapshots("gate"),
             collector.collect_snapshots("mexc"),
         )
-        if settings.aster_history_backfill_enabled:
-            await collector.backfill_recent_history(
-                "aster",
-                settings.aster_history_lookback_hours,
-            )
-        if settings.extended_history_backfill_enabled:
-            await collector.backfill_recent_history(
-                "extended",
-                settings.extended_history_lookback_hours,
-            )
-        if settings.bitget_history_backfill_enabled:
-            await collector.backfill_recent_history(
-                "bitget",
-                settings.bitget_history_lookback_hours,
-            )
-        if settings.gate_history_backfill_enabled:
-            await collector.backfill_recent_history(
-                "gate",
-                settings.gate_history_lookback_hours,
-            )
-        if settings.mexc_history_backfill_enabled:
-            await collector.backfill_recent_history(
-                "mexc",
-                settings.mexc_history_lookback_hours,
-            )
     except asyncio.CancelledError:
         raise
     except Exception:

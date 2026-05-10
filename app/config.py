@@ -10,6 +10,8 @@ class Settings:
     app_name: str = "Funding Spread Monitor"
     database_path: Path = Path("data") / "funding_spread.sqlite3"
     request_timeout_s: float = 15.0
+    snapshot_retention_per_exchange_ticker: int = 2
+    collector_run_retention_per_task: int = 20
     variational_poll_interval_s: int = 60
     aster_catalog_refresh_interval_s: int = 1800
     aster_poll_interval_s: int = 60
@@ -37,7 +39,7 @@ class Settings:
     mexc_collect_overlapping_only: bool = False
     mexc_current_batch_size: int = 10
     mexc_current_batch_pause_s: float = 1.0
-    mexc_history_backfill_enabled: bool = True
+    mexc_history_backfill_enabled: bool = False
     mexc_history_lookback_hours: int = 24
     mexc_history_page_size: int = 100
     show_only_multi_exchange_default: bool = False
@@ -53,6 +55,18 @@ class Settings:
             database_path=database_path,
             request_timeout_s=float(
                 os.getenv("FUNDING_SPREAD_REQUEST_TIMEOUT_S", defaults.request_timeout_s)
+            ),
+            snapshot_retention_per_exchange_ticker=int(
+                os.getenv(
+                    "FUNDING_SPREAD_SNAPSHOT_RETENTION_PER_EXCHANGE_TICKER",
+                    defaults.snapshot_retention_per_exchange_ticker,
+                )
+            ),
+            collector_run_retention_per_task=int(
+                os.getenv(
+                    "FUNDING_SPREAD_COLLECTOR_RUN_RETENTION_PER_TASK",
+                    defaults.collector_run_retention_per_task,
+                )
             ),
             variational_poll_interval_s=int(
                 os.getenv(

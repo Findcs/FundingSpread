@@ -221,10 +221,42 @@
         }
 
         .table-wrap {
-            overflow: auto;
+            overflow-x: auto;
+            overflow-y: auto;
             border: 1px solid var(--line);
             border-radius: 20px;
             background: rgba(255, 255, 255, 0.78);
+            scrollbar-gutter: stable both-edges;
+        }
+
+        .table-tools {
+            margin: 0 0 10px;
+        }
+
+        .table-scrollbar {
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 16px;
+            margin: 0 0 10px;
+            border-radius: 999px;
+            background: rgba(47, 111, 237, 0.07);
+            border: 1px solid rgba(47, 111, 237, 0.1);
+            scrollbar-gutter: stable;
+        }
+
+        .table-scrollbar[hidden] {
+            display: none;
+        }
+
+        .table-scrollbar-inner {
+            height: 1px;
+        }
+
+        .table-scrollbar-hint {
+            margin: 0 0 10px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
         }
 
         table {
@@ -357,6 +389,29 @@
             font-size: 16px;
             font-weight: 800;
             color: var(--ink);
+        }
+
+        .spread-cell {
+            min-width: 138px;
+        }
+
+        .table-wrap::-webkit-scrollbar,
+        .table-scrollbar::-webkit-scrollbar {
+            height: 12px;
+        }
+
+        .table-wrap::-webkit-scrollbar-track,
+        .table-scrollbar::-webkit-scrollbar-track {
+            background: rgba(47, 111, 237, 0.08);
+            border-radius: 999px;
+        }
+
+        .table-wrap::-webkit-scrollbar-thumb,
+        .table-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(47, 111, 237, 0.34);
+            border-radius: 999px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
 
         .status-list {
@@ -513,11 +568,21 @@
                 </div>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-tools">
+                <p class="table-scrollbar-hint">Scroll horizontally to inspect all exchange columns.</p>
+                <div class="table-scrollbar" data-table-scrollbar hidden>
+                    <div class="table-scrollbar-inner" data-table-scrollbar-inner></div>
+                </div>
+            </div>
+
+            <div class="table-wrap" data-table-wrap>
                 <table>
                     <thead>
                     <tr>
                         <th>Symbol</th>
+                        <th>Spread</th>
+                        <th>Best Rate</th>
+                        <th>Worst Rate</th>
                         {% for exchange in exchange_columns %}
                             <th>
                                 <span class="exchange-head">
@@ -526,9 +591,6 @@
                                 </span>
                             </th>
                         {% endfor %}
-                        <th>Best Rate</th>
-                        <th>Worst Rate</th>
-                        <th>Spread</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -538,7 +600,22 @@
                                 <td class="symbol-cell">
                                     <span class="symbol-chip">{{ row.ticker }}</span>
                                     <div class="symbol-meta">
-                                        {{ row.exchanges_count }} exchanges | updated {{ row.updated_at.strftime("%Y-%m-%d %H:%M") }}
+                                        {{ row.exchanges_count }} ex | upd {{ row.updated_at.strftime("%m-%d %H:%M") }}
+                                    </div>
+                                </td>
+                                <td class="spread-cell">
+                                    <span class="spread-pill">{{ "%.4f%%"|format(row.spread_1h_percent) }}</span>
+                                </td>
+                                <td>
+                                    <div class="extreme-box">
+                                        <div class="extreme-value positive">{{ "%.4f%%"|format(row.max_rate_1h_percent) }}</div>
+                                        <div class="extreme-meta">{{ exchange_meta[row.max_exchange].label }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="extreme-box">
+                                        <div class="extreme-value negative">{{ "%.4f%%"|format(row.min_rate_1h_percent) }}</div>
+                                        <div class="extreme-meta">{{ exchange_meta[row.min_exchange].label }}</div>
                                     </div>
                                 </td>
 
@@ -558,22 +635,6 @@
                                         {% endif %}
                                     </td>
                                 {% endfor %}
-
-                                <td>
-                                    <div class="extreme-box">
-                                        <div class="extreme-value positive">{{ "%.4f%%"|format(row.max_rate_1h_percent) }}</div>
-                                        <div class="extreme-meta">{{ exchange_meta[row.max_exchange].label }}</div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="extreme-box">
-                                        <div class="extreme-value negative">{{ "%.4f%%"|format(row.min_rate_1h_percent) }}</div>
-                                        <div class="extreme-meta">{{ exchange_meta[row.min_exchange].label }}</div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="spread-pill">{{ "%.4f%%"|format(row.spread_1h_percent) }}</span>
-                                </td>
                             </tr>
                         {% endfor %}
                     {% else %}
@@ -620,5 +681,50 @@
         </aside>
     </section>
 </main>
+<script>
+    (() => {
+        const tableWrap = document.querySelector('[data-table-wrap]');
+        const scrollbar = document.querySelector('[data-table-scrollbar]');
+        const scrollbarInner = document.querySelector('[data-table-scrollbar-inner]');
+        if (!tableWrap || !scrollbar || !scrollbarInner) {
+            return;
+        }
+
+        let syncingFromWrap = false;
+        let syncingFromBar = false;
+
+        const syncLayout = () => {
+            const needsHorizontalScroll = tableWrap.scrollWidth > tableWrap.clientWidth + 1;
+            scrollbar.hidden = !needsHorizontalScroll;
+            scrollbarInner.style.width = `${tableWrap.scrollWidth}px`;
+            if (!needsHorizontalScroll) {
+                tableWrap.scrollLeft = 0;
+                scrollbar.scrollLeft = 0;
+            }
+        };
+
+        tableWrap.addEventListener('scroll', () => {
+            if (syncingFromBar) {
+                return;
+            }
+            syncingFromWrap = true;
+            scrollbar.scrollLeft = tableWrap.scrollLeft;
+            syncingFromWrap = false;
+        });
+
+        scrollbar.addEventListener('scroll', () => {
+            if (syncingFromWrap) {
+                return;
+            }
+            syncingFromBar = true;
+            tableWrap.scrollLeft = scrollbar.scrollLeft;
+            syncingFromBar = false;
+        });
+
+        window.addEventListener('resize', syncLayout);
+        window.addEventListener('load', syncLayout);
+        syncLayout();
+    })();
+</script>
 </body>
 </html>

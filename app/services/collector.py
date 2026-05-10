@@ -23,6 +23,14 @@ class CollectionService:
         self.repository = repository
         self.adapters = adapters
         self.settings = settings
+        self.snapshot_retention_per_exchange_ticker = max(
+            1,
+            int(settings.snapshot_retention_per_exchange_ticker),
+        )
+        self.collector_run_retention_per_task = max(
+            1,
+            int(settings.collector_run_retention_per_task),
+        )
 
     async def refresh_catalog(self, exchange: str) -> int:
         adapter = self.adapters[exchange]
@@ -38,7 +46,8 @@ class CollectionService:
                     finished_at=utcnow(),
                     status="success",
                     item_count=len(markets),
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             return len(markets)
         except Exception as exc:
@@ -51,7 +60,8 @@ class CollectionService:
                     status="error",
                     item_count=0,
                     error_message=str(exc),
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             logger.exception("Catalog refresh failed for %s", exchange)
             raise
@@ -67,7 +77,10 @@ class CollectionService:
             snapshots = await adapter.fetch_current_snapshots(active_markets)
             if active_markets:
                 self.repository.upsert_markets(active_markets)
-            inserted_count = self.repository.insert_snapshots(snapshots)
+            inserted_count = self.repository.insert_snapshots(
+                snapshots,
+                keep_limit_per_exchange_ticker=self.snapshot_retention_per_exchange_ticker,
+            )
             self.repository.insert_collector_run(
                 CollectorRun(
                     exchange=exchange,
@@ -76,7 +89,8 @@ class CollectionService:
                     finished_at=utcnow(),
                     status="success",
                     item_count=inserted_count,
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             if snapshots and inserted_count == 0:
                 logger.warning(
@@ -95,7 +109,8 @@ class CollectionService:
                     status="error",
                     item_count=0,
                     error_message=str(exc),
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             logger.exception("Snapshot collection failed for %s", exchange)
             raise
@@ -109,7 +124,10 @@ class CollectionService:
         started_at = utcnow()
         try:
             snapshots = await adapter.fetch_recent_history(active_markets, lookback_hours)
-            inserted_count = self.repository.insert_snapshots(snapshots)
+            inserted_count = self.repository.insert_snapshots(
+                snapshots,
+                keep_limit_per_exchange_ticker=self.snapshot_retention_per_exchange_ticker,
+            )
             self.repository.insert_collector_run(
                 CollectorRun(
                     exchange=exchange,
@@ -118,7 +136,8 @@ class CollectionService:
                     finished_at=utcnow(),
                     status="success",
                     item_count=inserted_count,
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             if snapshots and inserted_count == 0:
                 logger.warning(
@@ -137,7 +156,8 @@ class CollectionService:
                     status="error",
                     item_count=0,
                     error_message=str(exc),
-                )
+                ),
+                keep_limit_per_exchange_task=self.collector_run_retention_per_task,
             )
             logger.exception("History backfill failed for %s", exchange)
             raise

@@ -163,7 +163,7 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
         spreads = client.get("/api/spreads").json()
         health = client.get("/health").json()
         dashboard = client.get("/")
-        history = client.get("/api/tickers/RAVE/history").json()
+        history = client.get("/api/tickers/RAVE/history?hours=8760").json()
 
     assert spreads["rows"][0]["ticker"] == "RAVE"
     assert spreads["rows"][0]["spread_1h_percent"] == pytest.approx(0.06476009)
@@ -181,6 +181,153 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
     assert "Best Rate" in dashboard.text
     assert "Gate" in dashboard.text
     assert history[0]["funding_rate_1h_percent"] > 0
+
+
+def test_repository_prunes_snapshots_and_collector_runs_to_retention_limits(tmp_path) -> None:
+    settings = Settings(
+        database_path=tmp_path / "retention.sqlite3",
+        snapshot_retention_per_exchange_ticker=2,
+        collector_run_retention_per_task=2,
+    )
+    repository = SQLiteRepository(settings.database_path)
+    repository.initialize()
+
+    repository.upsert_markets(
+        [
+            Market(
+                exchange="gate",
+                ticker="RAVE",
+                external_symbol="RAVE_USDT",
+                base_asset="RAVE",
+                quote_asset="USDT",
+                funding_interval_hours=8.0,
+            )
+        ]
+    )
+    base_time = datetime(2026, 5, 9, 12, 0, tzinfo=UTC)
+    for minute in range(4):
+        repository.insert_snapshots(
+            [
+                FundingSnapshot(
+                    exchange="gate",
+                    ticker="RAVE",
+                    external_symbol="RAVE_USDT",
+                    funding_rate_raw=0.0001 + minute,
+                    funding_rate_decimal=0.0001 + minute,
+                    funding_rate_display_percent=(0.0001 + minute) * 100.0,
+                    funding_interval_hours=8.0,
+                    funding_rate_1h_equiv=(0.0001 + minute) / 8.0,
+                    observed_at=base_time.replace(minute=minute),
+                    raw_payload={"ignored": True},
+                )
+            ],
+            keep_limit_per_exchange_ticker=2,
+        )
+        repository.insert_collector_run(
+            CollectorRun(
+                exchange="gate",
+                task_name="snapshot_collect",
+                started_at=base_time.replace(minute=minute),
+                finished_at=base_time.replace(minute=minute),
+                status="success",
+                item_count=1,
+            ),
+            keep_limit_per_exchange_task=2,
+        )
+
+    latest = repository.list_latest_snapshots()
+    history = repository.list_snapshot_history("RAVE", hours=24 * 365)
+    collector_runs = repository.latest_collector_runs()
+
+    assert repository.count_snapshots("gate") == 2
+    assert len(history) == 2
+    assert latest[0].observed_at.minute == 3
+    assert collector_runs[0]["item_count"] == 1
+    repository.close()
+
+
+def test_repository_compact_storage_prunes_existing_rows(tmp_path) -> None:
+    settings = Settings(database_path=tmp_path / "compact.sqlite3")
+    repository = SQLiteRepository(settings.database_path)
+    repository.initialize()
+    observed_at = datetime(2026, 5, 9, 12, 0, tzinfo=UTC)
+
+    repository.upsert_markets(
+        [
+            Market(
+                exchange="mexc",
+                ticker="BTC",
+                external_symbol="BTC_USDT",
+                base_asset="BTC",
+                quote_asset="USDT",
+                funding_interval_hours=8.0,
+            )
+        ]
+    )
+    with repository._cursor() as cursor:
+        cursor.executemany(
+            """
+            INSERT INTO funding_snapshots (
+                exchange, ticker, external_symbol, funding_rate_raw, funding_rate_decimal,
+                funding_rate_display_percent, funding_interval_hours, funding_rate_1h_equiv,
+                funding_rate_8h_equiv, normalization_mode, observation_source,
+                source_exchange_timestamp, mark_price, volume_24h, open_interest,
+                observed_at, next_settlement_at, raw_payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "mexc",
+                    "BTC",
+                    "BTC_USDT",
+                    0.0001 + idx,
+                    0.0001 + idx,
+                    (0.0001 + idx) * 100.0,
+                    8.0,
+                    (0.0001 + idx) / 8.0,
+                    0.0001 + idx,
+                    "identity",
+                    "live_poll",
+                    observed_at.isoformat(),
+                    None,
+                    None,
+                    None,
+                    observed_at.replace(minute=idx).isoformat(),
+                    None,
+                    "{}",
+                )
+                for idx in range(5)
+            ],
+        )
+        cursor.executemany(
+            """
+            INSERT INTO collector_runs (
+                exchange, task_name, started_at, finished_at, status, item_count, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "mexc",
+                    "snapshot_collect",
+                    observed_at.replace(minute=idx).isoformat(),
+                    observed_at.replace(minute=idx).isoformat(),
+                    "success",
+                    idx,
+                    None,
+                )
+                for idx in range(5)
+            ],
+        )
+
+    result = repository.compact_storage(
+        snapshot_retention_per_exchange_ticker=2,
+        collector_run_retention_per_task=2,
+    )
+
+    assert result["snapshots_remaining"] == 2
+    assert result["collector_runs_remaining"] == 2
+    assert repository.count_snapshots("mexc") == 2
+    repository.close()
 
 
 def test_repository_inserts_snapshots_into_legacy_schema_with_required_8h_field(tmp_path) -> None:
