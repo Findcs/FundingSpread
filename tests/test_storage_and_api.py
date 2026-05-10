@@ -194,6 +194,8 @@ def test_repository_migration_and_api_endpoints(tmp_path) -> None:
     assert "Gate" in dashboard.text
     assert "Price Spread" in dashboard.text
     assert "Min Volume" in dashboard.text
+    assert 'data-sticky-header-wrap' in dashboard.text
+    assert 'data-sticky-header-scroll' in dashboard.text
     assert "Long Gate vs Short Variational" in dashboard.text
     assert "12K" in dashboard.text
     assert "price 1.2345 | 8.0h" in dashboard.text
